@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Ruleta con Probabilidad</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: white;
+    text-align: center;
+}
+canvas {
+    background: #222;
+    border-radius: 50%;
+    margin-top: 20px;
+}
+input, button, select {
+    padding: 8px;
+    font-size: 15px;
+    margin: 3px;
+}
+button { cursor: pointer; }
+</style>
+</head>
+
+<body>
+
+<h2>🎯 Ruleta de Sorteo (Juego MAD)</h2>
+
+<input id="nombre" placeholder="Nombre">
+<input id="peso" type="number" value="1" min="1" placeholder="Peso">
+<button onclick="agregar()">Agregar</button>
+<button onclick="girar()">Girar</button>
+
+<br><br>
+
+<select id="eliminar"></select>
+<button onclick="quitar()">Quitar participante</button>
+
+<canvas id="ruleta" width="400" height="400"></canvas>
+
+<script>
+const canvas = document.getElementById("ruleta");
+const ctx = canvas.getContext("2d");
+
+let participantes = [];
+let colores = [];
+let anguloActual = 0;
+let girando = false;
+
+function colorRandom() {
+    return `hsl(${Math.random()*360},70%,60%)`;
+}
+
+function actualizarSelect() {
+    const sel = document.getElementById("eliminar");
+    sel.innerHTML = "";
+    participantes.forEach((p,i)=>{
+        let op = document.createElement("option");
+        op.value = i;
+        op.text = p.nombre;
+        sel.add(op);
+    });
+}
+
+function agregar() {
+    let nombre = document.getElementById("nombre").value.trim();
+    let peso = parseFloat(document.getElementById("peso").value);
+    if (!nombre || peso <= 0) return;
+
+    participantes.push({ nombre, peso });
+    colores.push(colorRandom());
+    document.getElementById("nombre").value = "";
+    actualizarSelect();
+    dibujar();
+}
+
+function quitar() {
+    let idx = document.getElementById("eliminar").value;
+    if (idx === "") return;
+    participantes.splice(idx,1);
+    colores.splice(idx,1);
+    actualizarSelect();
+    dibujar();
+}
+
+function dibujar() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    if (participantes.length === 0) return;
+
+    let cx = canvas.width/2;
+    let cy = canvas.height/2;
+    let r = canvas.width/2 - 10;
+    let anguloPorParte = 2*Math.PI / participantes.length;
+
+    participantes.forEach((p,i)=>{
+        let ini = anguloActual + i*anguloPorParte;
+        let fin = ini + anguloPorParte;
+
+        ctx.beginPath();
+        ctx.moveTo(cx,cy);
+        ctx.arc(cx,cy,r,ini,fin);
+        ctx.fillStyle = colores[i];
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(cx,cy);
+        ctx.rotate(ini + anguloPorParte/2);
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#000";
+        ctx.font = "15px Arial";
+        ctx.fillText(p.nombre, r-10,5);
+        ctx.restore();
+    });
+
+    // Puntero
+    ctx.beginPath();
+    ctx.moveTo(cx,5);
+    ctx.lineTo(cx-10,30);
+    ctx.lineTo(cx+10,30);
+    ctx.fillStyle = "red";
+    ctx.fill();
+}
+
+function girar() {
+    if (girando || participantes.length === 0) return;
+    girando = true;
+
+    // 🎯 GANADOR POR PROBABILIDAD
+    let totalPeso = participantes.reduce((s,p)=>s+p.peso,0);
+    let r = Math.random()*totalPeso;
+    let acum = 0;
+    let ganadorIndex = 0;
+
+    for (let i=0;i<participantes.length;i++){
+        acum += participantes[i].peso;
+        if (r <= acum) {
+            ganadorIndex = i;
+            break;
+        }
+    }
+
+    let anguloPorParte = 2*Math.PI / participantes.length;
+
+    // ÁNGULO EXACTO del centro del ganador bajo el puntero
+    let anguloGanador =
+        (3*Math.PI/2) -
+        (ganadorIndex*anguloPorParte + anguloPorParte/2);
+
+    let vueltas = 25;
+    let inicio = anguloActual;
+    let finExacto = vueltas*2*Math.PI + anguloGanador;
+
+    const duracion = 15000;
+    let start = null;
+
+    function easeOut(t) {
+        return 1 - Math.pow(1 - t, 3);
+    }
+
+    function animar(t) {
+        if (!start) start = t;
+        let p = (t - start) / duracion;
+        if (p > 1) p = 1;
+
+        anguloActual = inicio + (finExacto - inicio) * easeOut(p);
+        dibujar();
+
+        if (p < 1) {
+            requestAnimationFrame(animar);
+        } else {
+            // 🔒 FIJAMOS el ángulo EXACTO
+            anguloActual = finExacto % (2*Math.PI);
+            dibujar();
+            girando = false;
+
+            let ganador = participantes[ganadorIndex].nombre;
+            if (confirm("🎉 Ganador: " + ganador + "\n¿Eliminar de la ruleta?")) {
+                participantes.splice(ganadorIndex,1);
+                colores.splice(ganadorIndex,1);
+                actualizarSelect();
+                dibujar();
+            }
+        }
+    }
+
+    requestAnimationFrame(animar);
+}
+
+dibujar();
+</script>
+
+</body>
+</html>
